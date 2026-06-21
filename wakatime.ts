@@ -5,9 +5,10 @@
  * ===================================================
  *
  * Sends WakaTime heartbeats via wakatime-cli on:
- *   • File save    → is_write = true
- *   • Buffer edit  → is_write = false (debounced 2 min)
- *   • Cursor move  → is_write = false (debounced 2 min)
+ *   • File save      → is_write = true
+ *   • File open      → is_write = false (debounced 2 min)
+ *   • Buffer edit    → is_write = false (debounced 2 min)
+ *   • Cursor move    → is_write = false (debounced 2 min)
  *
  * The plugin is a thin TypeScript wrapper — all language detection,
  * project resolution, and API communication is delegated to the
@@ -57,6 +58,15 @@ const HEARTBEAT_INTERVAL_MS = 120_000; // 2 minutes
 /** Plugin identifier sent in the User-Agent header via the --plugin flag */
 const PLUGIN_UA = `fresh-editor/1.0.0 fresh-wakatime/${PLUGIN_VERSION}`;
 
+/** Regex for validating a WakaTime API key (UUID v4 with optional waka_ prefix) */
+const API_KEY_RE =
+  /^(?:waka_)?[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i;
+
+/** Best-effort format check — does not block heartbeats, only affects status display. */
+function isValidApiKey(key: string): boolean {
+  return API_KEY_RE.test(key);
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Mutable state
 // ─────────────────────────────────────────────────────────────
@@ -75,12 +85,19 @@ let lastHeartbeatFile: string | null = null;
  * Sets up event hooks, commands, and exports the typed API.
  */
 function init(): void {
+  // WAKATIME_API_KEY env var takes priority over ~/.wakatime.cfg
+  const envKey = editor.getEnv("WAKATIME_API_KEY");
+  // ponytail: no validation here — wakatime-cli does it.
+  // We forward whatever we find; a bad key just means no dashboard data.
+  if (envKey) apiKey = envKey;
+
   // Read the API key from disk (async, best-effort)
   loadApiKeyFromConfig();
 
   // ── Event hooks ──────────────────────────────────────────
   // Handlers must be global function names (closures are not supported).
   editor.on("buffer_save", "onWakaTimeSave");
+  editor.on("after_file_open", "onWakaTimeFileOpen");
   editor.on("buffer_modified", "onWakaTimeModified");
   editor.on("cursor_moved", "onWakaTimeCursorMoved");
 
@@ -196,6 +213,13 @@ globalThis.onWakaTimeSave = function onWakaTimeSave(): void {
   sendHeartbeatIfNeeded(true);
 };
 
+/** ponytail: this event name may not be in the public API spec.
+ *  Fresh dispatches events by name string; it works in practice.
+ *  Upgrade path: switch to buffer_activated if after_file_open is removed. */
+globalThis.onWakaTimeFileOpen = function onWakaTimeFileOpen(): void {
+  sendHeartbeatIfNeeded(false);
+};
+
 globalThis.onWakaTimeModified = function onWakaTimeModified(): void {
   sendHeartbeatIfNeeded(false);
 };
@@ -217,7 +241,11 @@ globalThis.wakatimeToggle = function wakatimeToggle(): void {
 
 globalThis.wakatimeStatus = function wakatimeStatus(): void {
   const statusLabel = enabled ? "enabled" : "disabled";
-  const keyLabel = apiKey ? "configured" : "not set";
+  const keyLabel = apiKey
+    ? isValidApiKey(apiKey)
+      ? "configured"
+      : "invalid format"
+    : "not set";
   const fileLabel = lastHeartbeatFile
     ? editor.pathBasename(lastHeartbeatFile)
     : "none";

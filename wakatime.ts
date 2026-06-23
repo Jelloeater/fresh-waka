@@ -154,15 +154,12 @@ function loadApiKeyFromConfig(): void {
   const configPath = editor.pathJoin(home, ".wakatime.cfg");
   if (!editor.fileExists(configPath)) return;
 
-  editor
-    .readFile(configPath)
-    .then((content: string) => {
-      const key = parseIniValue(content, "settings", "api_key");
-      if (key) apiKey = key;
-    })
-    .catch(() => {
-      /* config is optional – ignore read errors */
-    });
+  // ponytail: readFile is synchronous — returns string | null, not a Promise
+  const content = editor.readFile(configPath);
+  if (content) {
+    const key = parseIniValue(content, "settings", "api_key");
+    if (key) apiKey = key;
+  }
 }
 
 /**

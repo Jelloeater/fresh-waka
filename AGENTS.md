@@ -25,6 +25,7 @@ Guidance for AI agents working on this codebase.
 | Process spawning | `editor.spawnBackgroundProcess("wakatime-cli", args)` — fire-and-forget, no stdout/stderr capture needed |
 | INI parsing | Custom minimal parser in `parseIniValue()` — handles `#` and `;` comments, case-insensitive section matching |
 | Typed API | `editor.exportPluginApi("fresh-wakatime", api)` with global `FreshPluginRegistry` interface augmentation |
+| pathJoin | `editor.pathJoin(...parts: string[])` — rest params, **not** an array. `editor.pathJoin(a, b, c)` not `editor.pathJoin([a, b, c])` |
 
 ## Conventions
 

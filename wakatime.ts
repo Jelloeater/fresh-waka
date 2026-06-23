@@ -150,7 +150,8 @@ function loadApiKeyFromConfig(): void {
   const home = editor.getEnv("HOME");
   if (!home || home.length === 0) return;
 
-  const configPath = editor.pathJoin([home, ".wakatime.cfg"]);
+  // ponytail: API is pathJoin(...parts: string[]) not pathJoin(parts: string[])
+  const configPath = editor.pathJoin(home, ".wakatime.cfg");
   if (!editor.fileExists(configPath)) return;
 
   editor
